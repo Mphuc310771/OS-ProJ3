@@ -26,18 +26,26 @@ static void barrier() {
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
+  // Lock ngay từ đầu
   pthread_mutex_lock(&bstate.barrier_mutex);
 
-  bstate.nthread++; // This thread has arrived at the barrier
+  bstate.nthread++; 
 
   if (bstate.nthread == nthread) {
-    // Last thread to arrive - wake everyone up and start new round
+    // Luồng cuối cùng: reset bộ đếm, tăng round, đánh thức tất cả
     bstate.round++;
     bstate.nthread = 0;
     pthread_cond_broadcast(&bstate.barrier_cond);
   } else {
-    // Not all threads arrived yet - wait
-    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+    // Luồng đến sớm: Phải chờ
+    // 1. Lưu lại round hiện tại của mình
+    int my_round = bstate.round;
+    
+    // 2. Dùng WHILE để kiểm tra: Chừng nào round chưa nhảy số thì ngủ tiếp
+    // Cách này chống lại cả Spurious Wakeup lẫn Race Condition
+    while (bstate.round == my_round) {
+      pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+    }
   }
 
   pthread_mutex_unlock(&bstate.barrier_mutex);
